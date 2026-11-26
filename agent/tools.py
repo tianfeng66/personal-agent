@@ -69,9 +69,9 @@ SEARCH_SPECS = [
 ]
 
 CALENDAR_SPECS = [
-    _fn("calendar_events", "查看 Mac「日历」里的日程",
+    _fn("calendar_events", "查看 日历里的日程",
         {"start_date": _DATE, "days": {"type": "integer", "description": "查看几天，默认1，最多31"}}),
-    _fn("calendar_add_event", "在 Mac「日历」里新建日程",
+    _fn("calendar_add_event", "在 日历里新建日程",
         {"title": {"type": "string"}, "start": _DATETIME,
          "end": dict(_DATETIME, description="YYYY-MM-DD HH:MM，默认开始后1小时"),
          "location": {"type": "string"},
@@ -142,11 +142,12 @@ class ToolExecutor:
             "web_search": lambda query, max_results=5: search.web_search(cfg, query, max_results),
             "fetch_url": lambda url: search.fetch_url(url),
         }
-        if calendar_mac.available():
+        calendar = calendar_mac.provider(store)
+        if calendar:
             self.specs += CALENDAR_SPECS
-            self.capabilities.append("Mac 日历（查看/新建日程）")
-            self._handlers["calendar_events"] = calendar_mac.list_events
-            self._handlers["calendar_add_event"] = calendar_mac.add_event
+            self.capabilities.append("日历（查看/新建日程）")
+            self._handlers["calendar_events"] = calendar.list_events
+            self._handlers["calendar_add_event"] = calendar.add_event
         if cfg is not None and cfg.email_ready:
             self.specs += EMAIL_SPECS
             self.capabilities.append("邮箱（读取、草拟邮件）")

@@ -21,6 +21,10 @@ MAX_AGENTS = 10
 AGENT_TOOL_GROUPS = ("tasks", "notes", "worklogs", "reminders", "calendar", "search", "email", "wechat")
 
 SCHEMA = """
+CREATE TABLE IF NOT EXISTS calendar_events (
+    id INTEGER PRIMARY KEY, title TEXT NOT NULL, start TEXT NOT NULL,
+    end TEXT NOT NULL, location TEXT NOT NULL, calendar TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS tasks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT NOT NULL,

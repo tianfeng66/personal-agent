@@ -99,7 +99,10 @@ def main() -> None:
         serve(cfg, args.port)
         return
     if args.command in ("install", "uninstall", "status"):
-        from . import service
+        if sys.platform == "win32":
+            from . import service_windows as service
+        else:
+            from . import service
         if args.command == "install":
             service.install(cfg, args.port)
         elif args.command == "uninstall":

@@ -15,6 +15,23 @@ from typing import Any, Dict, List
 from . import IntegrationError
 
 
+def desktop_notify(title: str, message: str) -> bool:
+    if sys.platform == "win32":
+        import os
+        from pathlib import Path
+        script = Path(__file__).with_name("notify.ps1")
+        try:
+            result = subprocess.run(
+                ["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
+                 "-File", str(script)], timeout=12, capture_output=True,
+                creationflags=subprocess.CREATE_NO_WINDOW,
+                env=dict(os.environ, AGENT_NOTICE_TITLE=title[:60], AGENT_NOTICE_TEXT=message[:200]))
+            return result.returncode == 0
+        except (OSError, subprocess.TimeoutExpired):
+            return False
+    return mac_notify(title, message)
+
+
 def mac_notify(title: str, message: str) -> bool:
     """弹出 macOS 通知。参数通过 argv 传入，避免 AppleScript 注入。"""
     if sys.platform != "darwin":

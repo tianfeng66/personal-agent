@@ -82,6 +82,7 @@ async function loadStatus() {
   const s = await api("GET", "/api/status");
   today = s.today;
   integ = s.integrations || {};
+  if (integ.calendar_local) $("#calendar-hint").textContent = "日程保存在本机。可以在对话中让助理新建日程。";
   const st = $("#status");
   const chip = (text, on) => el("span", { class: on ? "on" : "off" }, text);
   st.replaceChildren(
@@ -325,7 +326,7 @@ async function checkReminders() {
 // ---------- 日程 ----------
 async function loadCalendar() {
   if (!integ.calendar) {
-    loading($("#cal-list"), "日历功能仅支持 macOS");
+    loading($("#cal-list"), "当前系统暂不支持日历");
     return;
   }
   loading($("#cal-list"), "正在读取日历…（日历事件多时需要十几秒）");

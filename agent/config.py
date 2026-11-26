@@ -11,7 +11,7 @@ def load_dotenv(path: Path) -> None:
     """极简 .env 解析器（KEY=VALUE），不覆盖已存在的环境变量。"""
     if not path.is_file():
         return
-    for raw in path.read_text(encoding="utf-8").splitlines():
+    for raw in path.read_text(encoding="utf-8-sig").splitlines():
         line = raw.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue

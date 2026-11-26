@@ -17,7 +17,7 @@ BACKUP_KEEP_DAYS = 14
 
 def deliver(cfg, reminder: Dict[str, Any]) -> List[str]:
     channels = []
-    if notify.mac_notify("私人工作助理 · 提醒", reminder["content"]):
+    if notify.desktop_notify("私人工作助理 · 提醒", reminder["content"]):
         channels.append("系统通知")
     if cfg.wechat_ready:
         try:

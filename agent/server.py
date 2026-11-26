@@ -48,6 +48,7 @@ class App:
     def __init__(self, cfg: Config):
         self.cfg = cfg
         self.store = Store(cfg.db_path)
+        self.calendar = calendar_mac.provider(self.store)
         self.llm_ready = bool(cfg.api_key) or cfg.is_local_llm
         self.agent = Agent(LLMClient(cfg.api_key, cfg.base_url, cfg.model), self.store,
                            on_tool=self._record_tool, cfg=cfg, on_event=self._record_event)
@@ -86,11 +87,16 @@ class App:
             raise HttpError(400, "未配置 LLM_API_KEY，请在 .env 中填写后重启")
 
     def status(self) -> Dict[str, Any]:
+        installation = None
+        if sys.platform == "win32":
+            from .service_windows import INSTALL_ID
+            installation = INSTALL_ID
         c = self.cfg
         return {
-            "model": c.model, "llm_ready": self.llm_ready, "today": today_str(),
+            "installation": installation, "model": c.model, "llm_ready": self.llm_ready, "today": today_str(),
             "integrations": {
-                "calendar": calendar_mac.available(),
+                "calendar": bool(self.calendar),
+                "calendar_local": sys.platform == "win32",
                 "email": c.email_ready,
                 "email_address": c.email_address if c.email_ready else "",
                 "wechat": c.wechat_ready,
@@ -184,7 +190,9 @@ class App:
             return s.pop_unseen_reminders()
 
         if key == ("GET", "/api/calendar"):
-            return calendar_mac.list_events(q.get("date") or None, int(q.get("days", "1") or 1))
+            if not self.calendar:
+                raise IntegrationError("此系统暂不支持日历")
+            return self.calendar.list_events(q.get("date") or None, int(q.get("days", "1") or 1))
         if key == ("GET", "/api/email/inbox"):
             return mail.list_emails(cfg, int(q.get("days", "3") or 3), q.get("q", ""), 20)
         if key == ("GET", "/api/email/drafts"):
@@ -318,7 +326,7 @@ def make_handler(app: App, port: int):
     return Handler
 
 
-def serve(cfg: Config, port: int = 8765) -> None:
+def serve(cfg: Config, port: int = 8765, on_ready=None) -> None:
     app = App(cfg)
     try:
         httpd = ThreadingHTTPServer(("127.0.0.1", port), make_handler(app, port))
@@ -333,6 +341,8 @@ def serve(cfg: Config, port: int = 8765) -> None:
     if not app.llm_ready:
         print("提示：未配置 LLM_API_KEY，任务/笔记/日志可用，AI 对话不可用。")
     try:
+        if on_ready:
+            on_ready()
         httpd.serve_forever()
     except KeyboardInterrupt:
         print("\n已停止。")

@@ -126,3 +126,39 @@ def add_event(title: str, start: str, end: Optional[str] = None,
                            location or "", calendar or ""]).strip()
     return {"title": title, "start": s.strftime("%Y-%m-%d %H:%M"),
             "end": e.strftime("%Y-%m-%d %H:%M"), "calendar": cal_name}
+
+def provider(store):
+    if sys.platform == "win32":
+        return LocalCalendar(store)
+    return sys.modules[__name__] if available() else None
+
+
+class LocalCalendar:
+    def __init__(self, store):
+        self.store = store
+
+    def list_events(self, start_date=None, days=1):
+        first = date.fromisoformat(validate_date(start_date)) if start_date else date.today()
+        stop = first + timedelta(days=max(1, min(int(days), 31)))
+        with self.store._lock:
+            rows = self.store.conn.execute(
+                "SELECT title, start, end, location, calendar FROM calendar_events "
+                "WHERE start < ? AND end > ? ORDER BY start, id",
+                (stop.isoformat() + " 00:00", first.isoformat() + " 00:00")).fetchall()
+        return [dict(row, all_day=False) for row in rows]
+
+    def add_event(self, title, start, end=None, location="", calendar=""):
+        title = (title or "").strip()
+        if not title:
+            raise ValueError("日程标题不能为空")
+        start = validate_datetime(start)
+        end = validate_datetime(end) if end else (
+            datetime.fromisoformat(start) + timedelta(hours=1)).isoformat(" ", timespec="minutes")
+        if end <= start:
+            raise ValueError("结束时间必须晚于开始时间")
+        calendar = calendar or "本地日历"
+        with self.store._lock, self.store.conn:
+            self.store.conn.execute(
+                "INSERT INTO calendar_events(title,start,end,location,calendar) VALUES(?,?,?,?,?)",
+                (title, start, end, location or "", calendar))
+        return dict(title=title, start=start, end=end, calendar=calendar)

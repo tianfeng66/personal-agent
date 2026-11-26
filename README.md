@@ -1,10 +1,28 @@
 # 私人 AI 工作助理
 
-用自然语言整理日常工作：待办任务、定时提醒、Mac 日历、邮件、微信推送、上网搜索、笔记、工作日志、日报、长期记忆。数据存在本地 SQLite，零第三方依赖（Python 3.9+）。
+用自然语言整理日常工作：待办任务、定时提醒、日历、邮件、微信推送、上网搜索、笔记、工作日志、日报、长期记忆。数据存在本地 SQLite，零第三方依赖（Python 3.9+）。
 
 设计参考了 GitHub 上的开源项目：[personal-os](https://github.com/amanaiproduct/personal-os)、[CowAgent](https://github.com/zhayujie/CowAgent)、[talorys](https://github.com/rociiu/talorys)。
 
-## 快速开始
+[下载 Windows x64 便携版](https://github.com/tianfeng66/personal-agent/releases/latest/download/Personal-Agent-Windows-x64.zip) · [查看更新记录](CHANGELOG.md)
+
+## Windows 快速开始
+
+将 Windows x64 便携包完整解压到可写文件夹，双击 **Start.cmd**。包内附带 Python，启动后默认浏览器会打开工作台。前台使用时保留命令窗口，按 Ctrl+C 可以退出。
+
+首次启动会生成同目录的 `.env`。任务、笔记、日志和提醒可以直接使用。要启用 AI 对话，用记事本打开 `.env`，按模型服务商填写 `LLM_API_KEY`、`LLM_BASE_URL` 和 `LLM_MODEL`，保存后重新启动。Windows 日程保存在应用的本地 SQLite 数据库里，可通过 AI 对话新建，在「日程」页查看。桌面提醒的可见性取决于 Windows 通知设置。
+
+如需在登录 Windows 后自动运行，先关闭前台服务，在解压目录打开 PowerShell，执行：
+
+```powershell
+.\runtime\python.exe -X utf8 -m agent install
+.\runtime\python.exe -X utf8 -m agent status
+.\runtime\python.exe -X utf8 -m agent uninstall
+```
+
+以上命令分别用于启用、查询和取消自启。启用后，双击 Start.cmd 即可打开正在运行的工作台。移动文件夹前请先取消自启，移动后重新启用。备份或迁移时保留整个 `data` 文件夹和 `.env`。仅下载源码的用户可安装 Python 3.9 或更高版本，并将命令中的 `.\runtime\python.exe` 换成 `py -3`。
+
+## macOS 快速开始
 
 ```bash
 cd personal-agent
@@ -47,7 +65,8 @@ python3 -m unittest discover -s tests -t .
 | 功能 | 说明 | 需要配置 |
 | --- | --- | --- |
 | 任务 / 笔记 / 日志 / 日报 / 记忆 | 对话或右侧面板手动管理 | 无 |
-| 定时提醒 | 「下午3点提醒我开会」，到点弹 Mac 通知 + 网页提示 | 无 |
+| 定时提醒 | 「下午3点提醒我开会」，到点弹系统通知 + 网页提示 | 无 |
+| Windows 日历 | 应用内本地日程 | 无 |
 | Mac 日历 | 查看、新建日程（iCloud/Google/Exchange 等在「日历」App 里登录过的都行） | 首次使用在系统弹窗点「好」 |
 | 上网搜索 | 搜索并读取网页 | 无（可选 `TAVILY_API_KEY`） |
 | 邮件 | 查看收件箱；AI 只能写草稿，要你在「邮件」页点「确认发送」 | `EMAIL_*`，密码填授权码 |
