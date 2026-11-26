@@ -109,6 +109,15 @@ TOOL_GROUPS: Dict[str, List[str]] = {
 }
 
 
+PRESET_ACTIONS = {fn["name"]: fn for fn in (spec["function"] for spec in BASE_SPECS)
+                  if fn["name"] in {"add_task", "list_tasks", "add_note", "search_notes", "add_worklog", "daily_summary"}}
+PROPOSE = _fn("propose_tool", "按用户要求设计工具草案，需用户在开发面板批准后生效。相同名称可替换旧版。",
+              {"name": {"type": "string"}, "description": {"type": "string"},
+               "action": {"type": "string", "enum": list(PRESET_ACTIONS)},
+               "fixed": {"type": "object", "description": "固定参数对象。其余参数在调用时填写。"}},
+              ["name", "description", "action", "fixed"])
+
+
 class ToolExecutor:
     def specs_for(self, groups: List[str]) -> List[Dict[str, Any]]:
         """按工具类别筛选（只包含当前已配置可用的工具）。"""
@@ -161,22 +170,63 @@ class ToolExecutor:
             self._handlers["send_wechat"] = lambda message, title="私人工作助理": \
                 {"sent_via": notify.wechat_push(cfg, title, message)}
 
+    def chat_specs(self, developing=False):
+        if developing:
+            return [PROPOSE]
+        specs = list(self.specs)
+        for preset in self.store.presets("active"):
+            params = PRESET_ACTIONS[preset["action"]]["parameters"]
+            free = {k: v for k, v in params["properties"].items() if k not in preset["fixed"]}
+            specs.append(_fn("custom_" + str(preset["id"]), preset["name"] + "：" + preset["description"],
+                             free, [k for k in params["required"] if k in free]))
+        return specs
+
+    @staticmethod
+    def _validate_params(action, values):
+        if action not in PRESET_ACTIONS or not isinstance(values, dict):
+            raise ValueError("不支持的动作或参数")
+        fields = PRESET_ACTIONS[action]["parameters"]["properties"]
+        for key, value in values.items():
+            field = fields.get(key)
+            if not field or type(value) is not {"string": str, "integer": int}[field["type"]]:
+                raise ValueError("无效参数：" + key)
+            if "enum" in field and value not in field["enum"]:
+                raise ValueError("无效选项：" + key)
+
+    def _propose(self, name, description, action, fixed):
+        if not all(isinstance(v, str) and v.strip() for v in (name, description, action)):
+            raise ValueError("请填写工具名称、用途和基础动作")
+        if len(name) > 40 or len(description) > 240 or len(json.dumps(fixed)) > 8000:
+            raise ValueError("工具定义过长")
+        self._validate_params(action, fixed)
+        return self.store.propose_preset(name.strip(), description.strip(), action, fixed)
+
+    def _perform_preset(self, action, fixed, args):
+        if fixed.keys() & args.keys():
+            raise ValueError("固定参数不可覆盖")
+        self._validate_params(action, args)
+        return self._handlers[action](**fixed, **args)
+
     def _draft_email(self, to: str, subject: str, body: str) -> Dict[str, Any]:
         addrs = mail.validate_recipients(to)
         d = self.store.add_draft(", ".join(addrs), subject, body)
         return {"draft_id": d["id"], "status": "待用户确认",
                 "hint": "邮件尚未发送，请提醒用户到网页「邮件」标签页确认发送"}
 
-    def run(self, name: str, arguments: str) -> str:
+    def run(self, name: str, arguments: str, developing: bool = False) -> str:
         """执行工具，始终返回 JSON 字符串（错误也以 JSON 返回给模型）。"""
-        handler = self._handlers.get(name)
-        if handler is None:
-            return json.dumps({"error": "未知工具: " + name}, ensure_ascii=False)
         try:
             args = json.loads(arguments or "{}")
             if not isinstance(args, dict):
                 raise ValueError("参数必须是 JSON 对象")
-            result = handler(**args)
+            if developing and name == "propose_tool":
+                result = self._propose(**args)
+            elif not developing and name.startswith("custom_") and len(name) <= 25 and name[7:].isascii() and name[7:].isdigit():
+                result = self.store.run_preset(int(name[7:]), args, self._perform_preset)
+            elif not developing and name in self._handlers:
+                result = self._handlers[name](**args)
+            else:
+                raise ValueError("未知工具: " + name)
             return json.dumps({"ok": True, "result": result}, ensure_ascii=False, default=str)
         except (ValueError, TypeError, IntegrationError) as e:
             return json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False)

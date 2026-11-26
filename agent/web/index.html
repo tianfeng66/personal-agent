@@ -23,6 +23,12 @@
         <button type="button" id="btn-reset" class="ghost">清空对话</button>
       </div>
     </div>
+    <details class="tool-studio" id="tool-studio">
+      <summary>开发与管理工具</summary>
+      <label><input id="developing" type="checkbox"> 在对话中设计工具</label>
+      <p class="muted">试试「做一个会议纪要工具，每条笔记固定加上会议标签」。审核草案后，切回普通对话即可使用。</p>
+      <ul class="list" id="presets" aria-live="polite"></ul>
+    </details>
     <div id="messages" class="messages" aria-live="polite">
       <div class="msg bot">你好，直接告诉我要做的事，比如：
 · 明天前把周报发给老板，优先级高

@@ -1,5 +1,6 @@
 """Agent 主循环：对话 -> 模型决定调用工具 -> 执行 -> 回传结果 -> 最终回答。"""
 
+import json
 import re
 from datetime import date, datetime
 from pathlib import Path
@@ -8,7 +9,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from .llm import LLMClient
 from .storage import Store
 from .team import WRAP_UP, Team, team_roster
-from .tools import ToolExecutor
+from .tools import PRESET_ACTIONS, ToolExecutor
 
 MENTION_RE = re.compile(r"^\s*@(\S+)\s+(.+)$", re.S)
 
@@ -112,10 +113,10 @@ class Agent:
             trimmed.pop(0)
         self.history = trimmed
 
-    def ask(self, user_text: str) -> str:
+    def ask(self, user_text: str, developing: bool = False) -> str:
         # 「@名字 任务」直接点名某个智能体，不经过总助理
         m = MENTION_RE.match(user_text)
-        if m and self.store.find_agent(m.group(1)):
+        if not developing and m and self.store.find_agent(m.group(1)):
             name, task = m.group(1), m.group(2).strip()
             self._push({"role": "user", "content": user_text})
             try:
@@ -129,7 +130,13 @@ class Agent:
 
         self._push({"role": "user", "content": user_text})
         for _ in range(MAX_TOOL_ROUNDS):
-            msg = self.llm.chat([self._system_message()] + self.history, tools=self.tools.specs)
+            system = self._system_message()
+            if developing:
+                system = {"role": "system", "content": "当前处于工具开发模式。只设计工具草案。"
+                          "用 propose_tool 保存草案，提示用户在开发面板审核。"
+                          "可固定以下基础动作的一部分参数，其余参数在调用时填写：" +
+                          json.dumps(PRESET_ACTIONS, ensure_ascii=False)}
+            msg = self.llm.chat([system] + self.history, tools=self.tools.chat_specs(developing))
             tool_calls = [
                 {"id": c.get("id", ""), "type": "function", "function": c.get("function", {})}
                 for c in (msg.get("tool_calls") or [])
@@ -146,13 +153,13 @@ class Agent:
                 name, args = fn.get("name", ""), fn.get("arguments", "{}")
                 if self.on_tool:
                     self.on_tool(name, args)
-                return self.tools.run(name, args)
+                return self.tools.run(name, args, developing=developing)
 
             # 同一轮里的多个 ask_agent 会并行执行
             for call, content in zip(tool_calls, self.team.run_calls(tool_calls, run_call)):
                 self._push({"role": "tool", "tool_call_id": call.get("id", ""), "content": content})
         # 工具次数用完：要求基于已有信息作答
-        msg = self.llm.chat([self._system_message()] + self.history +
+        msg = self.llm.chat([system] + self.history +
                             [{"role": "user", "content": WRAP_UP}], tools=None)
         reply = msg.get("content") or "（工具调用轮数过多，已停止。请换个说法再试。）"
         self._push({"role": "assistant", "content": reply})

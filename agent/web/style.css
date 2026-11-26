@@ -78,6 +78,10 @@ input, select, textarea {
 .msg.user { background: var(--user); align-self: flex-end; }
 .msg.error { border: 1px solid var(--danger); color: var(--danger); background: transparent; }
 .msg .tools { margin-top: 6px; font-size: 12px; color: var(--muted); }
+.tool-studio { padding: 8px 14px; border-bottom: 1px solid var(--border); max-height: 38%; overflow: auto; flex: 0 0 auto; }
+.tool-studio summary { cursor: pointer; }
+.tool-studio label { display: block; margin-top: 8px; }
+.tool-studio pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 .chat-form { display: flex; gap: 8px; padding: 10px; border-top: 1px solid var(--border); }
 .chat-form textarea { flex: 1; resize: none; }
 

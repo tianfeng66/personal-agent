@@ -154,6 +154,11 @@ class App:
         if m and method == "GET":
             return mail.read_email(cfg, m.group(1))
 
+        if path == "/api/tool-presets" and method == "GET":
+            return s.presets()
+        decision = re.fullmatch(r"/api/tool-presets/([0-9]+)/(approve|reject|revoke)", path)
+        if decision and method == "POST":
+            return s.decide_preset(int(decision[1]), decision[2])
         key = (method, path)
         if key == ("GET", "/api/status"):
             return self.status()
@@ -206,7 +211,7 @@ class App:
             if not message:
                 raise ValueError("消息不能为空")
             return self._with_agent(
-                lambda: {"reply": self.agent.ask(message), "tools": list(self._tool_log),
+                lambda: {"reply": self.agent.ask(message, developing=body.get("developing") is True), "tools": list(self._tool_log),
                          "events": list(self._events)})
         if key == ("GET", "/api/chat/progress"):
             return self.events_since(max(0, int(q.get("since", "0") or 0)))

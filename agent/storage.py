@@ -21,6 +21,11 @@ MAX_AGENTS = 10
 AGENT_TOOL_GROUPS = ("tasks", "notes", "worklogs", "reminders", "calendar", "search", "email", "wechat")
 
 SCHEMA = """
+CREATE TABLE IF NOT EXISTS tool_presets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, description TEXT NOT NULL,
+    action TEXT NOT NULL, fixed TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'pending'
+);
+CREATE UNIQUE INDEX IF NOT EXISTS preset_active ON tool_presets(name) WHERE state='active';
 CREATE TABLE IF NOT EXISTS calendar_events (
     id INTEGER PRIMARY KEY, title TEXT NOT NULL, start TEXT NOT NULL,
     end TEXT NOT NULL, location TEXT NOT NULL, calendar TEXT NOT NULL
@@ -551,6 +556,43 @@ class Store:
         finally:
             target.close()
         tmp.replace(dest)
+
+    def propose_preset(self, name, description, action, fixed):
+        with self.conn:
+            if self.conn.execute("SELECT COUNT(*) FROM tool_presets WHERE state='pending'").fetchone()[0] >= 30:
+                raise ValueError("请先处理已有工具草案")
+            cursor = self.conn.execute(
+                "INSERT INTO tool_presets(name,description,action,fixed) VALUES(?,?,?,?)",
+                (name, description, action, json.dumps(fixed, ensure_ascii=False)))
+        return {"id": cursor.lastrowid, "state": "待用户在开发面板审批"}
+
+    def presets(self, state=None):
+        query = "SELECT * FROM tool_presets WHERE state IN ('pending','active')"
+        rows = self.conn.execute(query + (" AND state=?" if state else "") + " ORDER BY id DESC",
+                                 (state,) if state else ())
+        return [dict(row, fixed=json.loads(row["fixed"])) for row in rows]
+
+    def decide_preset(self, preset_id, decision):
+        with self.conn:
+            row = self.conn.execute("SELECT name,state FROM tool_presets WHERE id=?", (preset_id,)).fetchone()
+            expected = "active" if decision == "revoke" else "pending"
+            if not row or row["state"] != expected:
+                raise ValueError("工具状态已变化，请刷新面板")
+            if decision == "approve":
+                self.conn.execute("UPDATE tool_presets SET state='archived' WHERE name=? AND state='active'",
+                                  (row["name"],))
+                if self.conn.execute("SELECT COUNT(*) FROM tool_presets WHERE state='active'").fetchone()[0] >= 20:
+                    raise ValueError("最多启用 20 个自定义工具，请先撤销已有工具")
+            self.conn.execute("UPDATE tool_presets SET state=? WHERE id=?",
+                              ("active" if decision == "approve" else "archived", preset_id))
+        return {"ok": True}
+
+    def run_preset(self, preset_id, args, perform):
+        row = self.conn.execute("SELECT action,fixed FROM tool_presets WHERE id=? AND state='active'",
+                                (preset_id,)).fetchone()
+        if not row:
+            raise ValueError("该工具尚未获批或已撤销")
+        return perform(row["action"], json.loads(row["fixed"]), args)
 
     # ---------- summary ----------
     def daily_summary(self, day: Optional[str] = None) -> Dict[str, Any]:

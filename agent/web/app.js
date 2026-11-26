@@ -77,6 +77,51 @@ function localInputValue(d) {
     "T" + pad(d.getHours()) + ":" + pad(d.getMinutes());
 }
 
+const presetActions = {
+  add_note: "保存笔记", search_notes: "搜索笔记", add_task: "添加任务",
+  list_tasks: "查询任务", add_worklog: "记录工作日志", daily_summary: "读取日报数据",
+};
+
+async function loadPresets() {
+  const items = await api("GET", "/api/tool-presets");
+  renderList($("#presets"), items, (item) => {
+    const pending = item.state === "pending";
+    const buttons = el("div", { class: "actions" });
+    function decision(label, action) {
+      return el("button", { type: "button", onclick: () => guarded(async () => {
+        await api("POST", "/api/tool-presets/" + item.id + "/" + action, {});
+        await loadPresets();
+        toast({ approve: "已启用，可在普通对话中调用", reject: "已拒绝草案", revoke: "已撤销工具" }[action], "info");
+      }) }, label);
+    }
+    if (pending) {
+      const replaces = items.some((other) => other.state === "active" && other.name === item.name);
+      buttons.append(decision(replaces ? "批准并替换同名工具" : "批准启用", "approve"), decision("拒绝", "reject"));
+    } else {
+      buttons.append(decision("撤销", "revoke"));
+    }
+    return el("li", {}, el("div", { class: "main" },
+      el("strong", {}, item.name), el("span", { class: "muted" }, pending ? " · 待审批" : " · 已启用"),
+      el("div", {}, item.description),
+      el("div", {}, "基础动作 · " + presetActions[item.action]),
+      el("pre", {}, "固定参数 " + JSON.stringify(item.fixed, null, 2)), buttons));
+  }, "还没有工具草案");
+}
+
+$("#tool-studio").addEventListener("toggle", () => {
+  if ($("#tool-studio").open) {
+    guarded(loadPresets);
+  } else if ($("#developing").checked) {
+    $("#developing").checked = false;
+    $("#developing").dispatchEvent(new Event("change"));
+  }
+});
+$("#developing").addEventListener("change", () => {
+  $("#chat-send").textContent = $("#developing").checked ? "设计" : "发送";
+  $("#chat-input").placeholder = $("#developing").checked ? "描述工具的用途和固定参数…" : "输入消息，Enter 发送，Shift+Enter 换行";
+  $("#chat-input").focus();
+});
+
 // ---------- 状态 ----------
 async function loadStatus() {
   const s = await api("GET", "/api/status");
@@ -615,7 +660,7 @@ function addMsg(role, text, tools, events) {
 }
 
 function setBusy(busy) {
-  ["#chat-send", "#btn-report", "#btn-reset"].forEach((s) => ($(s).disabled = busy));
+  ["#chat-send", "#btn-report", "#btn-reset", "#developing"].forEach((s) => ($(s).disabled = busy));
 }
 
 function afterTools(tools) {
@@ -666,6 +711,7 @@ async function sendChat(path, body, userText) {
     addMsg("bot error", e.message);
   } finally {
     polling = false;
+    if ($("#tool-studio").open || body.developing) guarded(loadPresets);
     setBusy(false);
     $("#chat-input").focus();
   }
@@ -676,7 +722,7 @@ $("#chat-form").addEventListener("submit", (e) => {
   const text = $("#chat-input").value.trim();
   if (!text || $("#chat-send").disabled) return;
   $("#chat-input").value = "";
-  sendChat("/api/chat", { message: text }, text);
+  sendChat("/api/chat", { message: text, developing: $("#developing").checked }, text);
 });
 $("#chat-input").addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
