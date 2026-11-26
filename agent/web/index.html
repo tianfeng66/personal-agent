@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>私人工作助理</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+<header class="topbar">
+  <h1>私人工作助理</h1>
+  <div id="status" class="status" role="status">连接中…</div>
+</header>
+
+<main class="layout">
+  <!-- 左侧：AI 对话 -->
+  <section class="panel chat" aria-labelledby="chat-title">
+    <div class="panel-head">
+      <h2 id="chat-title">AI 对话</h2>
+      <div class="actions">
+        <button type="button" id="btn-report">生成日报</button>
+        <button type="button" id="btn-reset" class="ghost">清空对话</button>
+      </div>
+    </div>
+    <div id="messages" class="messages" aria-live="polite">
+      <div class="msg bot">你好，直接告诉我要做的事，比如：
+· 明天前把周报发给老板，优先级高
+· 下午3点提醒我给客户回电话
+· 帮我看看明天有哪些会
+· 搜一下最近的 AI 行业新闻
+· 看看今天有没有重要邮件</div>
+    </div>
+    <form id="chat-form" class="chat-form">
+      <label for="chat-input" class="sr-only">输入消息</label>
+      <textarea id="chat-input" rows="2" placeholder="输入消息，Enter 发送，Shift+Enter 换行"></textarea>
+      <button type="submit" id="chat-send">发送</button>
+    </form>
+  </section>
+
+  <!-- 右侧：数据面板 -->
+  <section class="panel data" aria-label="工作数据">
+    <nav class="tabs" role="tablist">
+      <button type="button" role="tab" class="tab active" data-tab="tasks" aria-selected="true">任务</button>
+      <button type="button" role="tab" class="tab" data-tab="team" aria-selected="false">团队</button>
+      <button type="button" role="tab" class="tab" data-tab="reminders" aria-selected="false">提醒</button>
+      <button type="button" role="tab" class="tab" data-tab="calendar" aria-selected="false">日程</button>
+      <button type="button" role="tab" class="tab" data-tab="email" aria-selected="false">邮件</button>
+      <button type="button" role="tab" class="tab" data-tab="worklogs" aria-selected="false">日志</button>
+      <button type="button" role="tab" class="tab" data-tab="notes" aria-selected="false">笔记</button>
+      <button type="button" role="tab" class="tab" data-tab="memories" aria-selected="false">记忆</button>
+    </nav>
+
+    <div id="tab-tasks" class="tab-body" role="tabpanel">
+      <form id="task-form" class="inline-form">
+        <label class="sr-only" for="task-title">任务标题</label>
+        <input id="task-title" placeholder="新任务…" required>
+        <label class="sr-only" for="task-priority">优先级</label>
+        <select id="task-priority">
+          <option value="high">高</option>
+          <option value="medium" selected>中</option>
+          <option value="low">低</option>
+        </select>
+        <label class="sr-only" for="task-due">截止日期</label>
+        <input id="task-due" type="date">
+        <button type="submit">添加</button>
+      </form>
+      <div class="filter">
+        <label for="task-filter">显示：</label>
+        <select id="task-filter">
+          <option value="open">未完成</option>
+          <option value="done">已完成</option>
+          <option value="all">全部</option>
+        </select>
+      </div>
+      <ul id="task-list" class="list"></ul>
+    </div>
+
+    <div id="tab-team" class="tab-body" role="tabpanel" hidden>
+      <p class="muted">总助理负责统筹，会把任务分给下面的成员，成员之间也可以互相请求帮忙，最后由总助理汇总。也可以在对话框输入「@名字 任务」直接点名某个成员。</p>
+      <div class="filter">
+        <span>从模板创建：</span>
+        <span id="agent-templates"></span>
+      </div>
+      <form id="agent-form" class="stack-form" hidden>
+        <h3 class="sub" id="agent-form-title">新建智能体</h3>
+        <label for="agent-name">名字</label>
+        <input id="agent-name" maxlength="20" required placeholder="例如：研究员">
+        <label for="agent-role">职责（一句话）</label>
+        <input id="agent-role" maxlength="100" required placeholder="例如：上网查资料并整理成要点">
+        <label for="agent-instructions">工作要求（可选）</label>
+        <textarea id="agent-instructions" rows="3" maxlength="2000" placeholder="例如：每条信息注明来源和日期"></textarea>
+        <fieldset class="tool-groups">
+          <legend>允许使用的工具</legend>
+          <div id="agent-groups"></div>
+        </fieldset>
+        <div class="actions">
+          <button type="button" id="agent-cancel" class="ghost">取消</button>
+          <button type="submit">保存</button>
+        </div>
+      </form>
+      <button type="button" id="agent-new" class="ghost">新建智能体</button>
+      <ul id="agent-list" class="list"></ul>
+    </div>
+
+    <div id="tab-reminders" class="tab-body" role="tabpanel" hidden>
+      <form id="rem-form" class="inline-form">
+        <label class="sr-only" for="rem-content">提醒内容</label>
+        <input id="rem-content" placeholder="提醒我做什么…" required>
+        <label class="sr-only" for="rem-at">提醒时间</label>
+        <input id="rem-at" type="datetime-local" required>
+        <button type="submit">添加</button>
+      </form>
+      <div class="filter">
+        <label for="rem-filter">显示：</label>
+        <select id="rem-filter">
+          <option value="pending">待提醒</option>
+          <option value="all">全部</option>
+        </select>
+        <button type="button" id="btn-notify" class="ghost small" hidden>开启浏览器通知</button>
+      </div>
+      <p class="muted">到时间会弹出 Mac 系统通知<span id="rem-wechat-hint"></span>。网页服务需要保持运行。</p>
+      <ul id="rem-list" class="list"></ul>
+    </div>
+
+    <div id="tab-calendar" class="tab-body" role="tabpanel" hidden>
+      <div class="inline-form">
+        <label class="sr-only" for="cal-date">开始日期</label>
+        <input id="cal-date" type="date">
+        <label class="sr-only" for="cal-days">天数</label>
+        <select id="cal-days">
+          <option value="1">当天</option>
+          <option value="3">3 天</option>
+          <option value="7">7 天</option>
+        </select>
+        <button type="button" id="cal-load">查看</button>
+      </div>
+      <p class="muted">读取 Mac「日历」App。第一次使用时，系统会询问是否允许访问，请点「好」。</p>
+      <ul id="cal-list" class="list"></ul>
+    </div>
+
+    <div id="tab-email" class="tab-body" role="tabpanel" hidden>
+      <p id="email-off" class="muted" hidden>还没有配置邮箱。在 .env 里填写邮箱地址和授权码后重启即可，详见 README。</p>
+      <h3 class="sub">待确认发送的草稿</h3>
+      <ul id="draft-list" class="list"></ul>
+      <div id="inbox-box">
+        <h3 class="sub">收件箱</h3>
+        <div class="inline-form">
+          <label class="sr-only" for="mail-q">筛选</label>
+          <input id="mail-q" type="search" placeholder="按主题或发件人筛选">
+          <label class="sr-only" for="mail-days">时间范围</label>
+          <select id="mail-days">
+            <option value="1">今天</option>
+            <option value="3" selected>3 天</option>
+            <option value="7">7 天</option>
+          </select>
+          <button type="button" id="mail-load">刷新</button>
+        </div>
+        <ul id="mail-list" class="list"></ul>
+      </div>
+    </div>
+
+    <div id="tab-worklogs" class="tab-body" role="tabpanel" hidden>
+      <form id="log-form" class="inline-form">
+        <label class="sr-only" for="log-content">做了什么</label>
+        <input id="log-content" placeholder="今天做了什么…" required>
+        <label class="sr-only" for="log-minutes">分钟</label>
+        <input id="log-minutes" type="number" min="0" placeholder="分钟" class="short">
+        <button type="submit">记录</button>
+      </form>
+      <p id="log-total" class="muted"></p>
+      <ul id="log-list" class="list"></ul>
+    </div>
+
+    <div id="tab-notes" class="tab-body" role="tabpanel" hidden>
+      <form id="note-form" class="stack-form">
+        <label class="sr-only" for="note-title">标题</label>
+        <input id="note-title" placeholder="笔记标题" required>
+        <label class="sr-only" for="note-content">内容</label>
+        <textarea id="note-content" rows="3" placeholder="内容" required></textarea>
+        <label class="sr-only" for="note-tags">标签</label>
+        <input id="note-tags" placeholder="标签（逗号分隔，可选）">
+        <button type="submit">保存笔记</button>
+      </form>
+      <label class="sr-only" for="note-search">搜索笔记</label>
+      <input id="note-search" type="search" placeholder="搜索笔记…" class="search">
+      <ul id="note-list" class="list"></ul>
+    </div>
+
+    <div id="tab-memories" class="tab-body" role="tabpanel" hidden>
+      <form id="mem-form" class="inline-form">
+        <label class="sr-only" for="mem-content">要记住的信息</label>
+        <input id="mem-content" placeholder="例如：我是产品经理，负责支付项目" required>
+        <button type="submit">记住</button>
+      </form>
+      <ul id="mem-list" class="list"></ul>
+      <div class="wechat-box">
+        <h3 class="sub">微信推送</h3>
+        <p id="wechat-state" class="muted"></p>
+        <button type="button" id="btn-wechat-test" class="ghost" hidden>发送测试消息</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="toast" class="toast" role="alert" hidden></div>
+</body>
+</html>
